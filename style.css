@@ -1,0 +1,140 @@
+/* style.css */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    background-color: #f4f7f6;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+    width: 100%;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Buttons */
+.btn {
+    display: block;
+    width: 100%;
+    padding: 15px;
+    margin-bottom: 15px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    transition: background 0.3s;
+}
+
+.btn-primary { background-color: #007bff; color: white; }
+.btn-primary:hover { background-color: #0056b3; }
+.btn-success { background-color: #28a745; color: white; }
+.btn-success:hover { background-color: #218838; }
+.btn-danger { background-color: #dc3545; color: white; }
+.btn-danger:hover { background-color: #c82333; }
+.btn-secondary { background-color: #6c757d; color: white; }
+
+/* Forms */
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+/* Cards */
+.card {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.card h2 { margin-bottom: 10px; font-size: 20px; }
+.card p { margin-bottom: 8px; color: #555; }
+
+/* Status Messages */
+.message {
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    font-weight: bold;
+    display: none;
+}
+.message.error { background-color: #f8d7da; color: #721c24; display: block; }
+.message.success { background-color: #d4edda; color: #155724; display: block; }
+.message.warning { background-color: #fff3cd; color: #856404; display: block; }
+
+/* Map Container (Student Page) */
+#map {
+    height: 50vh;
+    width: 100%;
+    border-radius: 12px;
+    margin-bottom: 15px;
+    z-index: 1;
+}
+
+/* Route Timeline */
+.timeline {
+    list-style: none;
+    padding-left: 0;
+}
+.timeline li {
+    padding: 10px 15px;
+    border-left: 3px solid #007bff;
+    margin-bottom: 10px;
+    background: #f8f9fa;
+    border-radius: 0 8px 8px 0;
+    position: relative;
+}
+.timeline li::before {
+    content: '';
+    position: absolute;
+    left: -8px;
+    top: 15px;
+    width: 13px;
+    height: 13px;
+    background: #007bff;
+    border-radius: 50%;
+}
+.timeline li.next-stop {
+    border-left-color: #28a745;
+    background: #e8f5e9;
+    font-weight: bold;
+}
+.timeline li.next-stop::before {
+    background: #28a745;
+}
+
+/* Desktop adjustments */
+@media (min-width: 768px) {
+    .container { max-width: 800px; }
+    #map { height: 60vh; }
+}

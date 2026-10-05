@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Login</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h2 style="text-align: center; margin-bottom: 20px;">Driver Login</h2>
+            
+            <div id="message" class="message"></div>
+
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" required placeholder="driver@test.com">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required placeholder="******">
+                </div>
+                <button type="submit" class="btn btn-primary">Login</button>
+            </form>
+            <a href="index.html" class="btn btn-secondary" style="margin-top: 10px;">Back to Home</a>
+        </div>
+    </div>
+
+    <script type="module">
+        import { auth } from './firebase-config.js';
+        import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        const loginForm = document.getElementById('loginForm');
+        const messageDiv = document.getElementById('message');
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            messageDiv.className = 'message';
+            messageDiv.style.display = 'none';
+
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                // Login successful, redirect to dashboard
+                window.location.href = 'driver-dashboard.html';
+            } catch (error) {
+                console.error("Login Error:", error);
+                messageDiv.textContent = "Login failed: " + error.message;
+                messageDiv.className = 'message error';
+            }
+        });
+    </script>
+</body>
+</html>

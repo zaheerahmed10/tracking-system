@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Bus Tracking</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+</head>
+<body>
+    <div class="container">
+        <div class="card" style="margin-bottom: 10px; padding: 15px;">
+            <h2>Live Bus Tracking</h2>
+            <p><strong>Bus:</strong> BUS-01 | <strong>Route:</strong> Route 01</p>
+            <p><strong>Status:</strong> <span id="statusText" style="color: gray;">Loading...</span></p>
+            <p><strong>Last Updated:</strong> <span id="lastUpdated">--</span></p>
+        </div>
+
+        <div id="message" class="message"></div>
+        <div id="map"></div>
+
+        <div class="card">
+            <h3>Route Stops</h3>
+            <ul class="timeline">
+                <li class="next-stop">1. Naka</li>
+                <li>2. Mehran Hotel</li>
+                <li>3. D Chowk</li>
+                <li>4. Main City</li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script type="module">
+        import { db } from './firebase-config.js';
+        import { ref, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        const BUS_ID = 'BUS01';
+        const statusText = document.getElementById('statusText');
+        const lastUpdatedSpan = document.getElementById('lastUpdated');
+        const messageDiv = document.getElementById('message');
+
+        // --- Route Stops Coordinates (Sample for Karachi) ---
+        const stops = [
+            { name: "Naka", lat: 24.8750, lng: 67.0600 },
+            { name: "Mehran Hotel", lat: 24.8750, lng: 67.0300 },
+            { name: "D Chowk", lat: 24.8600, lng: 67.0100 },
+            { name: "Main City", lat: 24.8500, lng: 67.0000 }
+        ];
+
+        // 1. Initialize Map
+        const map = L.map('map').setView([24.8607, 67.0011], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+        // 2. Add Stops to Map
+        stops.forEach((stop, index) => {
+            const stopIcon = L.divIcon({
+                html: `<div style="background: #007bff; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">${index + 1}</div>`,
+                className: 'stop-icon', iconSize: [24, 24], iconAnchor: [12, 12]
+            });
+            L.marker([stop.lat, stop.lng], { icon: stopIcon }).addTo(map).bindPopup(stop.name);
+        });
+
+        // Draw route line
+        const routeLine = L.polyline(stops.map(s => [s.lat, s.lng]), { color: '#007bff', weight: 3, opacity: 0.5 }).addTo(map);
+        map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+
+        // 3. Bus Marker
+        const busIcon = L.divIcon({ html: '<div style="font-size: 30px; filter: drop-shadow(0 0 5px rgba(0,0,0,0.5));">🚌</div>', className: 'bus-icon', iconSize: [35, 35], iconAnchor: [17, 17] });
+        let busMarker = L.marker([24.8607, 67.0011], { icon: busIcon }).addTo(map);
+        busMarker.bindPopup("<b>BUS-01</b><br>Live Location");
+
+        // 4. Listen to Firebase
+        const busRef = ref(db, `liveLocation/${BUS_ID}`);
+        
+        onValue(busRef, (snapshot) => {
+            const data = snapshot.val();
+
+            if (!data) {
+                statusText.textContent = "Bus location is currently unavailable.";
+                statusText.style.color = "red";
+                return;
+            }
+
+            if (!data.isTracking) {
+                statusText.textContent = "Bus is not currently tracking.";
+                statusText.style.color = "orange";
+                return;
+            }
+
+            // Stale check
+            const timeDiff = (Date.now() - data.timestamp) / 1000;
+            if (timeDiff > 120) {
+                statusText.textContent = "Stale location (No recent update).";
+                statusText.style.color = "orange";
+            } else {
+                statusText.textContent = "Tracking Active";
+                statusText.style.color = "green";
+            }
+
+            // Update Map
+            const newLatLng = [data.latitude, data.longitude];
+            busMarker.setLatLng(newLatLng);
+            
+            // Auto-center map to bus location (smoothly)
+            map.panTo(newLatLng);
+
+            // Update Time
+            lastUpdatedSpan.textContent = new Date(data.timestamp).toLocaleTimeString();
+            messageDiv.style.display = 'none';
+
+        }, (error) => {
+            statusText.textContent = "Error connecting to Firebase.";
+            statusText.style.color = "red";
+            messageDiv.textContent = "Firebase connection error.";
+            messageDiv.className = 'message error';
+        });
+    </script>
+</body>
+</html>
