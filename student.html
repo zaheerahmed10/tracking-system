@@ -6,13 +6,30 @@
     <title>Student Bus Tracking</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        /* Moving Bus Animation */
+        .bus-moving { animation: pulse 1.5s infinite; }
+        @keyframes pulse {
+            0% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(0,255,0,0.8)); }
+            50% { transform: scale(1.2); filter: drop-shadow(0 0 10px rgba(0,255,0,1)); }
+            100% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(0,255,0,0.8)); }
+        }
+        .status-badge {
+            display: inline-block; padding: 5px 10px; border-radius: 20px; 
+            font-weight: bold; font-size: 14px; color: white;
+        }
+        .status-moving { background-color: #28a745; }
+        .status-stopped { background-color: #dc3545; }
+        .status-offline { background-color: #6c757d; }
+    </style>
 </head>
 <body>
     <div class="container">
         <div class="card" style="margin-bottom: 10px; padding: 15px;">
             <h2>Live Bus Tracking</h2>
             <p><strong>Bus:</strong> BUS-01 | <strong>Route:</strong> Route 01</p>
-            <p><strong>Status:</strong> <span id="statusText" style="color: gray;">Loading...</span></p>
+            <p><strong>Status:</strong> <span id="statusText" class="status-badge status-offline">Loading...</span></p>
+            <p><strong>Vehicle:</strong> <span id="movementText" style="font-weight:bold; color: gray;">Waiting for GPS...</span></p>
             <p><strong>Last Updated:</strong> <span id="lastUpdated">--</span></p>
         </div>
 
@@ -37,10 +54,15 @@
 
         const BUS_ID = 'BUS01';
         const statusText = document.getElementById('statusText');
+        const movementText = document.getElementById('movementText');
         const lastUpdatedSpan = document.getElementById('lastUpdated');
         const messageDiv = document.getElementById('message');
 
-        // --- Route Stops Coordinates (Sample for Karachi) ---
+        // Default Map View (Pakistan center, will zoom to bus soon)
+        const map = L.map('map').setView([30.3753, 69.3451], 5);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+        // Sample Stops (Karachi) - Keep them for reference
         const stops = [
             { name: "Naka", lat: 24.8750, lng: 67.0600 },
             { name: "Mehran Hotel", lat: 24.8750, lng: 67.0300 },
@@ -48,11 +70,7 @@
             { name: "Main City", lat: 24.8500, lng: 67.0000 }
         ];
 
-        // 1. Initialize Map
-        const map = L.map('map').setView([24.8607, 67.0011], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-
-        // 2. Add Stops to Map
+        // Add stops and route line to map
         stops.forEach((stop, index) => {
             const stopIcon = L.divIcon({
                 html: `<div style="background: #007bff; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">${index + 1}</div>`,
@@ -60,58 +78,92 @@
             });
             L.marker([stop.lat, stop.lng], { icon: stopIcon }).addTo(map).bindPopup(stop.name);
         });
-
-        // Draw route line
         const routeLine = L.polyline(stops.map(s => [s.lat, s.lng]), { color: '#007bff', weight: 3, opacity: 0.5 }).addTo(map);
-        map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
 
-        // 3. Bus Marker
-        const busIcon = L.divIcon({ html: '<div style="font-size: 30px; filter: drop-shadow(0 0 5px rgba(0,0,0,0.5));">🚌</div>', className: 'bus-icon', iconSize: [35, 35], iconAnchor: [17, 17] });
-        let busMarker = L.marker([24.8607, 67.0011], { icon: busIcon }).addTo(map);
+        // Bus Marker
+        const busIcon = L.divIcon({ 
+            html: '<div id="busIconHtml" style="font-size: 30px; filter: drop-shadow(0 0 5px rgba(0,0,0,0.5));">🚌</div>', 
+            className: 'bus-icon', iconSize: [35, 35], iconAnchor: [17, 17] 
+        });
+        let busMarker = L.marker([30.3753, 69.3451], { icon: busIcon }).addTo(map);
         busMarker.bindPopup("<b>BUS-01</b><br>Live Location");
 
-        // 4. Listen to Firebase
+        let isFirstLoad = true;
+        let previousLat = null;
+        let previousLng = null;
+
+        // Listen to Firebase
         const busRef = ref(db, `liveLocation/${BUS_ID}`);
         
         onValue(busRef, (snapshot) => {
             const data = snapshot.val();
 
             if (!data) {
-                statusText.textContent = "Bus location is currently unavailable.";
-                statusText.style.color = "red";
+                statusText.textContent = "Unavailable";
+                statusText.className = "status-badge status-offline";
+                movementText.textContent = "Bus location unavailable.";
                 return;
             }
 
             if (!data.isTracking) {
-                statusText.textContent = "Bus is not currently tracking.";
-                statusText.style.color = "orange";
+                statusText.textContent = "Stopped";
+                statusText.className = "status-badge status-stopped";
+                movementText.textContent = "Bus is not currently tracking.";
+                movementText.style.color = "orange";
                 return;
             }
 
-            // Stale check
+            // Check for stale data (older than 2 mins)
             const timeDiff = (Date.now() - data.timestamp) / 1000;
             if (timeDiff > 120) {
-                statusText.textContent = "Stale location (No recent update).";
-                statusText.style.color = "orange";
+                statusText.textContent = "Stale";
+                statusText.className = "status-badge status-offline";
             } else {
-                statusText.textContent = "Tracking Active";
-                statusText.style.color = "green";
+                statusText.textContent = "Active";
+                statusText.className = "status-badge status-moving";
             }
 
-            // Update Map
+            // Movement Detection (Check if coordinates changed)
+            let isMoving = false;
+            if (previousLat !== null && previousLng !== null) {
+                if (Math.abs(data.latitude - previousLat) > 0.0001 || Math.abs(data.longitude - previousLng) > 0.0001) {
+                    isMoving = true;
+                }
+            }
+            previousLat = data.latitude;
+            previousLng = data.longitude;
+
+            // Update Movement UI
+            const busIconHtml = document.getElementById('busIconHtml');
+            if (isMoving) {
+                movementText.textContent = "Vehicle is Moving 🟢";
+                movementText.style.color = "#28a745";
+                if(busIconHtml) busIconHtml.classList.add('bus-moving');
+            } else {
+                movementText.textContent = "Vehicle is Stopped 🔴";
+                movementText.style.color = "#dc3545";
+                if(busIconHtml) busIconHtml.classList.remove('bus-moving');
+            }
+
+            // Update Map Location
             const newLatLng = [data.latitude, data.longitude];
             busMarker.setLatLng(newLatLng);
             
-            // Auto-center map to bus location (smoothly)
-            map.panTo(newLatLng);
+            // Auto-center map to bus (First time setView, then panTo)
+            if (isFirstLoad) {
+                map.setView(newLatLng, 15); // Zoom in to street level
+                isFirstLoad = false;
+            } else {
+                map.panTo(newLatLng);
+            }
 
             // Update Time
             lastUpdatedSpan.textContent = new Date(data.timestamp).toLocaleTimeString();
             messageDiv.style.display = 'none';
 
         }, (error) => {
-            statusText.textContent = "Error connecting to Firebase.";
-            statusText.style.color = "red";
+            statusText.textContent = "Error";
+            statusText.className = "status-badge status-offline";
             messageDiv.textContent = "Firebase connection error.";
             messageDiv.className = 'message error';
         });

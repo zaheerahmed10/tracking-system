@@ -5,10 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Driver Dashboard</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         #driverMap { height: 200px; width: 100%; border-radius: 8px; margin-bottom: 15px; z-index: 1; }
+        .status-badge {
+            display: inline-block; padding: 5px 10px; border-radius: 20px; 
+            font-weight: bold; font-size: 14px; color: white;
+        }
+        .status-moving { background-color: #28a745; }
+        .status-stopped { background-color: #dc3545; }
     </style>
 </head>
 <body>
@@ -17,7 +22,8 @@
             <h2>Driver Dashboard</h2>
             <p><strong>Driver:</strong> Ahmed</p>
             <p><strong>Bus:</strong> BUS-01</p>
-            <p><strong>Status:</strong> <span id="trackingStatus" style="color: red;">Stopped</span></p>
+            <p><strong>Status:</strong> <span id="trackingStatus" class="status-badge status-stopped">Stopped</span></p>
+            <p><strong>Movement:</strong> <span id="movementStatus" style="font-weight:bold; color: gray;">Waiting...</span></p>
             <div id="driverMap"></div>
         </div>
 
@@ -28,7 +34,6 @@
         <button id="logoutBtn" class="btn btn-secondary">Logout</button>
     </div>
 
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script type="module">
         import { auth, db } from './firebase-config.js';
@@ -38,18 +43,23 @@
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
         const logoutBtn = document.getElementById('logoutBtn');
-        const statusSpan = document.getElementById('trackingStatus');
+        const trackingStatus = document.getElementById('trackingStatus');
+        const movementStatus = document.getElementById('movementStatus');
         const messageDiv = document.getElementById('message');
 
         let watchId = null;
         let lastUpdateTime = 0;
         const BUS_ID = 'BUS01';
 
-        // --- Driver Map Setup ---
-        const map = L.map('driverMap').setView([24.8607, 67.0011], 15);
+        // Driver Map Setup
+        const map = L.map('driverMap').setView([30.3753, 69.3451], 5); // Default Pakistan view
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         const busIcon = L.divIcon({ html: '<div style="font-size: 24px;">🚌</div>', className: 'bus-icon', iconSize: [30, 30], iconAnchor: [15, 15] });
-        let busMarker = L.marker([24.8607, 67.0011], { icon: busIcon }).addTo(map);
+        let busMarker = L.marker([30.3753, 69.3451], { icon: busIcon }).addTo(map);
+        
+        let isFirstLoad = true;
+        let previousLat = null;
+        let previousLng = null;
 
         onAuthStateChanged(auth, (user) => {
             if (!user) window.location.href = 'driver.html';
@@ -67,12 +77,39 @@
             watchId = navigator.geolocation.watchPosition(
                 (position) => {
                     const now = Date.now();
-                    // Update map instantly for driver feedback
+                    
+                    // Movement Detection
+                    let isMoving = false;
+                    if (previousLat !== null && previousLng !== null) {
+                        if (Math.abs(position.coords.latitude - previousLat) > 0.0001 || Math.abs(position.coords.longitude - previousLng) > 0.0001) {
+                            isMoving = true;
+                        }
+                    }
+                    previousLat = position.coords.latitude;
+                    previousLng = position.coords.longitude;
+
+                    // Update UI
+                    if (isMoving) {
+                        movementStatus.textContent = "Moving 🟢";
+                        movementStatus.style.color = "#28a745";
+                    } else {
+                        movementStatus.textContent = "Stopped 🔴";
+                        movementStatus.style.color = "#dc3545";
+                    }
+
+                    // Update Map instantly
                     const newLatLng = [position.coords.latitude, position.coords.longitude];
                     busMarker.setLatLng(newLatLng);
-                    map.panTo(newLatLng);
+                    
+                    if (isFirstLoad) {
+                        map.setView(newLatLng, 15); // Zoom to driver's actual location
+                        isFirstLoad = false;
+                    } else {
+                        map.panTo(newLatLng);
+                    }
 
-                    if (now - lastUpdateTime > 10000) { // Firebase update every 10s
+                    // Send to Firebase every 10s
+                    if (now - lastUpdateTime > 10000) {
                         sendLocationToFirebase(position);
                         lastUpdateTime = now;
                     }
@@ -86,8 +123,8 @@
                 { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
             );
 
-            statusSpan.textContent = "Tracking...";
-            statusSpan.style.color = "green";
+            trackingStatus.textContent = "Tracking...";
+            trackingStatus.className = "status-badge status-moving";
             startBtn.disabled = true;
             stopBtn.disabled = false;
             showMessage("Tracking started!", "success");
@@ -101,8 +138,10 @@
             set(busRef, { isTracking: false, timestamp: Date.now() })
                 .then(() => {
                     showMessage("Tracking stopped.", "warning");
-                    statusSpan.textContent = "Stopped";
-                    statusSpan.style.color = "red";
+                    trackingStatus.textContent = "Stopped";
+                    trackingStatus.className = "status-badge status-stopped";
+                    movementStatus.textContent = "Stopped 🔴";
+                    movementStatus.style.color = "#dc3545";
                     startBtn.disabled = false;
                     stopBtn.disabled = true;
                 }).catch(err => showMessage("Error: " + err.message, "error"));
